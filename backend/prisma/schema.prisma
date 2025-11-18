@@ -10,6 +10,50 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum ConversationStatus {
+  ACTIVE
+  ARCHIVED
+  ESCALATED
+  RESOLVED
+}
+
+enum WidgetPosition {
+  BOTTOM_RIGHT
+  BOTTOM_LEFT
+  TOP_RIGHT
+  TOP_LEFT
+}
+
+enum TemplateCategory {
+  GREETING
+  FAQ
+  SUPPORT
+  SALES
+  ESCALATION
+  CLOSING
+}
+
+model User {
+  id          String      @id @default(cuid())
+  email       String      @unique
+  name        String
+  role        UserRole    @default(MEMBER)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  sites       SiteUser[]
+  auditLogs   AuditLog[]
+
+  @@index([email])
+}
+
 model Site {
   id          String        @id @default(cuid())
   ownerId     String
@@ -17,27 +61,78 @@ model Site {
   domain      String
   publicKey   String        @unique @default(cuid())
   secretKey   String        @unique @default(cuid())
+  isActive    Boolean       @default(true)
+  metadata    Json?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
   sessions    ChatSession[]
+  users       SiteUser[]
+  configuration WidgetConfiguration?
+  templates   MessageTemplate[]
+  webhooks    WebhookEndpoint[]
+  analytics   AnalyticsSnapshot[]
 
   @@index([ownerId])
   @@index([publicKey])
+  @@index([isActive])
+}
+
+model SiteUser {
+  id        String      @id @default(cuid())
+  siteId    String
+  userId    String
+  role      UserRole    @default(MEMBER)
+  createdAt DateTime    @default(now())
+
+  site      Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, userId])
+  @@index([siteId])
+  @@index([userId])
+}
+
+model WidgetConfiguration {
+  id              String          @id @default(cuid())
+  siteId          String          @unique
+  primaryColor    String          @default("#667eea")
+  secondaryColor  String          @default("#764ba2")
+  position        WidgetPosition  @default(BOTTOM_RIGHT)
+  greetingMessage String          @default("Hello! How can we help you today?")
+  placeholderText String          @default("Type your message...")
+  headerText      String          @default("Chat with us")
+  borderRadius    Int             @default(12)
+  showBranding    Boolean         @default(true)
+  customCSS       String?         @db.Text
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  site            Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
 }
 
 model ChatSession {
-  id          String        @id @default(cuid())
+  id          String              @id @default(cuid())
   siteId      String
-  sessionKey  String        @unique @default(cuid())
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  sessionKey  String              @unique @default(cuid())
+  status      ConversationStatus  @default(ACTIVE)
+  userEmail   String?
+  userName    String?
+  metadata    Json?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
-  site        Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site        Site                @relation(fields: [siteId], references: [id], onDelete: Cascade)
   messages    ChatMessage[]
+  tags        SessionTag[]
+  rating      ConversationRating?
 
   @@index([siteId])
   @@index([sessionKey])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model ChatMessage {
@@ -45,10 +140,121 @@ model ChatMessage {
   sessionId   String
   role        String      // 'user' or 'assistant'
   content     String      @db.Text
+  metadata    Json?
   createdAt   DateTime    @default(now())
 
   session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
+  @@index([createdAt])
+}
+
+model ConversationTag {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  color       String      @default("#6b7280")
+  description String?
+  createdAt   DateTime    @default(now())
+
+  sessions    SessionTag[]
+
+  @@index([name])
+}
+
+model SessionTag {
+  id          String      @id @default(cuid())
+  sessionId   String
+  tagId       String
+  createdAt   DateTime    @default(now())
+
+  session     ChatSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  tag         ConversationTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, tagId])
+  @@index([sessionId])
+  @@index([tagId])
+}
+
+model ConversationRating {
+  id          String      @id @default(cuid())
+  sessionId   String      @unique
+  rating      Int         // 1-5
+  feedback    String?     @db.Text
+  createdAt   DateTime    @default(now())
+
+  session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([rating])
+}
+
+model MessageTemplate {
+  id          String            @id @default(cuid())
+  siteId      String
+  category    TemplateCategory
+  title       String
+  content     String            @db.Text
+  isActive    Boolean           @default(true)
+  sortOrder   Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  site        Site              @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@index([category])
+  @@index([isActive])
+}
+
+model AnalyticsSnapshot {
+  id                String      @id @default(cuid())
+  siteId            String
+  date              DateTime    @db.Date
+  totalSessions     Int         @default(0)
+  totalMessages     Int         @default(0)
+  avgMessagesPerSession Float   @default(0)
+  avgRating         Float?
+  uniqueVisitors    Int         @default(0)
+  createdAt         DateTime    @default(now())
+
+  site              Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, date])
+  @@index([siteId])
+  @@index([date])
+}
+
+model WebhookEndpoint {
+  id          String      @id @default(cuid())
+  siteId      String
+  url         String
+  events      String[]    // Array of event types to subscribe to
+  secret      String      // For webhook signature verification
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  site        Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([siteId])
+  @@index([isActive])
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  userId      String
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
   @@index([createdAt])
 }
