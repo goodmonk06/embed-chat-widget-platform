@@ -2,23 +2,21 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../db';
 import { llmService } from '../llm';
 import { nanoid } from 'nanoid';
+import { initWidgetSchema, chatMessageSchema } from '../schemas';
+import { NotFoundError } from '../utils/errors';
 
 export async function widgetRoutes(fastify: FastifyInstance) {
   // Initialize a new chat session
   fastify.post('/api/widget/init', async (request, reply) => {
-    const { siteKey } = request.body as { siteKey: string };
-
-    if (!siteKey) {
-      return reply.code(400).send({ error: 'siteKey is required' });
-    }
+    const body = initWidgetSchema.parse(request.body);
 
     // Verify the site exists with this public key
     const site = await prisma.site.findUnique({
-      where: { publicKey: siteKey },
+      where: { publicKey: body.siteKey },
     });
 
     if (!site) {
-      return reply.code(404).send({ error: 'Invalid siteKey' });
+      throw new NotFoundError('Site');
     }
 
     // Create a new session
@@ -37,18 +35,11 @@ export async function widgetRoutes(fastify: FastifyInstance) {
 
   // Handle chat messages
   fastify.post('/api/widget/chat', async (request, reply) => {
-    const { sessionKey, message } = request.body as {
-      sessionKey: string;
-      message: string;
-    };
-
-    if (!sessionKey || !message) {
-      return reply.code(400).send({ error: 'sessionKey and message are required' });
-    }
+    const body = chatMessageSchema.parse(request.body);
 
     // Find the session
     const session = await prisma.chatSession.findUnique({
-      where: { sessionKey },
+      where: { sessionKey: body.sessionKey },
       include: {
         messages: {
           orderBy: { createdAt: 'asc' },
@@ -58,7 +49,7 @@ export async function widgetRoutes(fastify: FastifyInstance) {
     });
 
     if (!session) {
-      return reply.code(404).send({ error: 'Session not found' });
+      throw new NotFoundError('Session');
     }
 
     // Save user message
@@ -66,7 +57,7 @@ export async function widgetRoutes(fastify: FastifyInstance) {
       data: {
         sessionId: session.id,
         role: 'user',
-        content: message,
+        content: body.message,
       },
     });
 
@@ -79,7 +70,7 @@ export async function widgetRoutes(fastify: FastifyInstance) {
     // Add the new user message
     conversationHistory.push({
       role: 'user',
-      content: message,
+      content: body.message,
     });
 
     try {
@@ -102,10 +93,7 @@ export async function widgetRoutes(fastify: FastifyInstance) {
       };
     } catch (error) {
       fastify.log.error(error);
-      return reply.code(500).send({
-        error: 'Failed to generate response',
-        message: 'An error occurred while processing your message.',
-      });
+      throw new Error('Failed to generate AI response');
     }
   });
 }

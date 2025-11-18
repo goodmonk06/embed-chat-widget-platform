@@ -2,439 +2,542 @@
 
 An embeddable AI chat widget platform that allows you to add intelligent chat functionality to any website with just a few lines of code.
 
-## ✨ Features
+**Status: Phase 2** - Production-ready with complete vertical slice, testing, and Docker support.
 
-- **Easy Integration**: Embed on any website with a simple JavaScript snippet
-- **AI-Powered**: Supports both OpenAI (GPT) and Anthropic (Claude) for intelligent responses
-- **Session Management**: Maintains conversation context across messages
-- **Beautiful UI**: Responsive, modern chat interface that works on all devices
-- **Admin Dashboard**: Manage multiple sites, view analytics, and monitor conversations
-- **Analytics**: Track sessions, messages, and user engagement
-- **TypeScript**: Full type safety across the entire stack
+## Overview
 
-## 🏗️ Architecture
+Cocoon Chat is a full-stack, TypeScript-based platform for embedding AI-powered chat widgets on any website. It provides:
 
-This is a monorepo containing three main components:
+- **Backend API** for managing sites, sessions, and AI-powered conversations
+- **Embeddable Widget** that can be dropped into any HTML page
+- **Admin Dashboard** for site owners to manage their widgets and view analytics
+
+## Tech Stack
+
+### Backend
+- **Fastify** - Fast, low-overhead web framework
+- **Prisma** - Type-safe ORM for PostgreSQL
+- **Zod** - Schema validation
+- **Vitest** - Unit testing
+- **TypeScript** - Full type safety
+
+### Widget
+- **Vanilla TypeScript** - No framework dependencies
+- **Vite** - Fast bundler
+
+### Admin Dashboard
+- **Next.js 14** - React framework with App Router
+- **Tailwind CSS** - Utility-first styling
+- **TypeScript** - Type safety
+
+### Infrastructure
+- **PostgreSQL** - Primary database
+- **Docker** - Containerization
+- **Docker Compose** - Multi-container orchestration
+
+## Domain Model
+
+### Core Entities
+
+```
+Site (website using the widget)
+  ├─ id, ownerId, name, domain
+  ├─ publicKey (for widget embedding)
+  └─ secretKey (for admin operations)
+
+ChatSession (individual conversation)
+  ├─ id, sessionKey
+  ├─ siteId (belongs to Site)
+  └─ messages[]
+
+ChatMessage (single message in conversation)
+  ├─ id, role (user/assistant)
+  ├─ content, createdAt
+  └─ sessionId (belongs to ChatSession)
+```
+
+### Relationships
+- One Site → Many ChatSessions
+- One ChatSession → Many ChatMessages
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+ and npm
+- PostgreSQL 15+ (or use Docker)
+- OpenAI API key OR Anthropic API key
+
+### Option 1: Docker (Recommended)
+
+The fastest way to get started:
+
+```bash
+# 1. Clone the repository
+git clone <repo-url>
+cd embed-chat-widget-platform
+
+# 2. Copy environment file
+cp .env.example .env
+
+# 3. Edit .env and add your AI API key
+# OPENAI_API_KEY=sk-...
+# or
+# ANTHROPIC_API_KEY=sk-ant-...
+
+# 4. Start all services with Docker
+npm run docker:up
+
+# 5. Run migrations and seed data
+docker compose exec backend npx prisma migrate deploy
+docker compose exec backend npm run db:seed
+
+# 6. Access the application
+# - Admin Dashboard: http://localhost:3000
+# - Backend API: http://localhost:3001
+# - Health Check: http://localhost:3001/health
+```
+
+### Option 2: Local Development
+
+For active development without Docker:
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Setup environment
+cp .env.example .env
+# Edit .env with your database URL and AI API key
+
+# 3. Setup database
+npm run db:generate  # Generate Prisma client
+npm run db:migrate   # Run migrations
+npm run db:seed      # Seed demo data
+
+# 4. Start development servers
+# Option A: Start all at once (backend + admin)
+npm run dev
+
+# Option B: Start individually in separate terminals
+npm run dev:backend  # Terminal 1
+npm run dev:admin    # Terminal 2
+npm run dev:widget   # Terminal 3 (optional, for widget demo)
+
+# 5. Run tests
+npm test
+
+# 6. Run linter
+npm run lint
+```
+
+## Example Flow: Site Management Vertical Slice
+
+This implementation includes a complete end-to-end flow for Site management:
+
+### 1. Create a Site (API)
+
+```bash
+curl -X POST http://localhost:3001/api/admin/sites \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Blog",
+    "domain": "myblog.com",
+    "ownerId": "demo-owner-1"
+  }'
+```
+
+Response:
+```json
+{
+  "id": "clxy...",
+  "name": "My Blog",
+  "domain": "myblog.com",
+  "publicKey": "clxz...",
+  "secretKey": "clya...",
+  "ownerId": "demo-owner-1",
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+```
+
+### 2. List Sites (Dashboard)
+
+1. Visit http://localhost:3000/sites
+2. Sites are listed with session counts
+3. Click "View Analytics" to see detailed stats
+4. Click "Copy Embed Code" to get the widget snippet
+
+### 3. View Analytics
+
+```bash
+curl http://localhost:3001/api/admin/sites/{siteId}/analytics
+```
+
+Returns:
+- Total sessions count
+- Total messages count
+- Recent sessions with message previews
+
+### 4. Update Site
+
+```bash
+curl -X PUT http://localhost:3001/api/admin/sites/{siteId} \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Updated Blog Name",
+    "domain": "newdomain.com"
+  }'
+```
+
+### 5. Embed Widget
+
+Add to any HTML page:
+
+```html
+<!-- Place before closing </body> tag -->
+<script src="http://localhost:3001/widget/cocoon-chat.js"></script>
+<script>
+  createCocoonChatWidget({
+    siteKey: 'YOUR_PUBLIC_KEY_HERE',
+    apiUrl: 'http://localhost:3001'
+  });
+</script>
+```
+
+### 6. Test Chat Flow
+
+1. Widget initializes and creates a session
+2. User types a message
+3. Message is sent to backend with LLM integration
+4. AI response is returned and displayed
+5. All messages are persisted in database
+
+## Demo Data
+
+After running `npm run db:seed`, you'll have:
+
+**Sites:**
+- TechBlog Pro (ownerId: demo-owner-1)
+- E-Commerce Store (ownerId: demo-owner-1)
+- Support Portal (ownerId: demo-owner-2)
+
+**Sessions:**
+- Pre-seeded conversations with realistic chat messages
+
+**Quick Demo:**
+1. Go to http://localhost:3000/sites
+2. Click "Create Site" or view existing demo sites
+3. Use ownerId: `demo-owner-1` or `demo-owner-2`
+4. View analytics to see pre-seeded data
+
+## API Endpoints
+
+### Widget Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/widget/init` | Initialize a new chat session |
+| POST | `/api/widget/chat` | Send a chat message and get AI response |
+
+### Admin Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/admin/sites` | Create a new site |
+| GET | `/api/admin/sites?ownerId={id}` | List all sites for an owner |
+| GET | `/api/admin/sites/:siteId` | Get specific site details |
+| PUT | `/api/admin/sites/:siteId` | Update a site |
+| DELETE | `/api/admin/sites/:siteId` | Delete a site |
+| GET | `/api/admin/sites/:siteId/analytics` | Get site analytics |
+| GET | `/api/admin/sessions/:sessionId/messages` | Get session messages |
+
+### Health Check
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Service health status |
+
+## Available Scripts
+
+### Root Level
+
+```bash
+npm run dev              # Start backend + admin in dev mode
+npm run build            # Build all packages
+npm test                 # Run backend tests
+npm run lint             # Run linter
+npm run db:generate      # Generate Prisma client
+npm run db:migrate       # Run database migrations
+npm run db:push          # Push schema changes (no migration)
+npm run db:seed          # Seed database with demo data
+npm run db:studio        # Open Prisma Studio
+
+# Docker commands
+npm run docker:up        # Start all services
+npm run docker:down      # Stop all services
+npm run docker:logs      # View logs
+npm run docker:rebuild   # Rebuild and restart
+```
+
+### Package-Specific
+
+```bash
+# Backend
+cd backend
+npm run dev              # Development server with hot reload
+npm run build            # Build TypeScript
+npm start                # Production server
+npm test                 # Run tests
+npm run test:watch       # Run tests in watch mode
+npm run test:ui          # Open Vitest UI
+
+# Admin
+cd admin
+npm run dev              # Next.js dev server
+npm run build            # Build for production
+npm start                # Production server
+npm run lint             # ESLint
+
+# Widget
+cd widget
+npm run dev              # Vite dev server
+npm run build            # Build widget bundle
+npm run preview          # Preview production build
+```
+
+## Testing
+
+The project includes comprehensive tests for core functionality:
+
+```bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm run test:watch
+
+# Run tests with UI
+npm run test:ui
+
+# View coverage
+npm test -- --coverage
+```
+
+**Test Coverage:**
+- ✅ Schema validation (Zod)
+- ✅ Error handling classes
+- ✅ Site CRUD operations
+- ✅ Widget initialization
+- ✅ Chat message flow
+
+## Validation & Error Handling
+
+All API inputs are validated using Zod schemas. Errors are handled consistently:
+
+**Validation Error (400):**
+```json
+{
+  "error": "Validation failed",
+  "details": [
+    {
+      "path": "name",
+      "message": "Site name is required"
+    }
+  ]
+}
+```
+
+**Not Found (404):**
+```json
+{
+  "error": "Site not found"
+}
+```
+
+**Server Error (500):**
+```json
+{
+  "error": "Internal server error",
+  "message": "Detailed error in development mode"
+}
+```
+
+## Project Structure
 
 ```
 embed-chat-widget-platform/
-├── backend/          # Fastify API server (Node.js + TypeScript)
-├── widget/           # Embeddable chat widget (Vanilla JS/TS + Vite)
-├── admin/            # Admin dashboard (Next.js + React)
-└── package.json      # Workspace configuration
+├── backend/                    # Fastify API
+│   ├── src/
+│   │   ├── routes/            # API routes
+│   │   │   ├── admin.ts       # Admin endpoints
+│   │   │   └── widget.ts      # Widget endpoints
+│   │   ├── schemas/           # Zod validation schemas
+│   │   ├── utils/             # Utilities & error handling
+│   │   ├── db.ts              # Prisma client
+│   │   ├── llm.ts             # AI integration
+│   │   └── index.ts           # Server entry point
+│   ├── prisma/
+│   │   ├── schema.prisma      # Database schema
+│   │   └── seed.ts            # Seed script
+│   ├── vitest.config.ts       # Test configuration
+│   └── Dockerfile
+├── widget/                     # Embeddable widget
+│   ├── src/
+│   │   ├── index.ts           # Widget logic
+│   │   └── styles.ts          # Widget styles
+│   └── vite.config.js
+├── admin/                      # Next.js dashboard
+│   ├── app/
+│   │   ├── page.tsx           # Home page
+│   │   └── sites/             # Site management pages
+│   └── Dockerfile
+├── docker-compose.yml          # Multi-container setup
+├── .env.example                # Environment template
+└── README.md                   # This file
 ```
 
-### Tech Stack
+## Environment Variables
 
-- **Backend**: Fastify, Prisma, PostgreSQL, TypeScript
-- **Widget**: Vanilla TypeScript, Vite
-- **Admin**: Next.js 14, React, Tailwind CSS
-- **Database**: PostgreSQL with Prisma ORM
-- **AI**: OpenAI API or Anthropic API
-
-## 📋 Prerequisites
-
-- Node.js 18+ and npm
-- PostgreSQL database
-- OpenAI API key OR Anthropic API key
-
-## 🚀 Quick Start
-
-### 1. Clone and Install
+Required variables in `.env`:
 
 ```bash
-git clone <your-repo-url>
-cd embed-chat-widget-platform
-npm install
-```
-
-### 2. Setup Environment Variables
-
-Create a `.env` file in the root directory:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your configuration:
-
-```env
 # Database
-DATABASE_URL="postgresql://user:password@localhost:5432/cocoon_chat?schema=public"
+DATABASE_URL="postgresql://user:password@localhost:5432/cocoon_chat"
 
-# Choose ONE AI provider:
+# AI Provider (choose one)
 OPENAI_API_KEY="sk-..."
 # OR
 ANTHROPIC_API_KEY="sk-ant-..."
 
 # Backend
 PORT=3001
+HOST=0.0.0.0
 NODE_ENV=development
 
-# Admin UI
+# Admin
 NEXT_PUBLIC_API_URL=http://localhost:3001
-
-# JWT Secret (change in production)
-JWT_SECRET="your-secret-key-change-in-production"
 ```
 
-### 3. Setup Database
+## Production Deployment
 
-```bash
-# Generate Prisma client
-npm run prisma:generate
+### Backend
 
-# Run migrations
-npm run prisma:migrate
-```
-
-### 4. Build Everything
-
-```bash
-# Build all packages
-npm run build
-
-# Or build individually
-npm run build:backend
-npm run build:widget
-npm run build:admin
-```
-
-### 5. Start Development Servers
-
-**Option A: Start all services in separate terminals**
-
-```bash
-# Terminal 1: Backend API
-npm run dev:backend
-
-# Terminal 2: Admin Dashboard
-npm run dev:admin
-
-# Terminal 3: Widget Development
-npm run dev:widget
-```
-
-**Option B: Production mode**
-
-```bash
-# Start backend in production
-cd backend && npm start
-
-# Start admin in production
-cd admin && npm start
-```
-
-## 📖 Usage
+1. Build: `npm run build:backend`
+2. Set environment variables
+3. Run migrations: `npx prisma migrate deploy`
+4. Start: `npm start`
 
 ### Admin Dashboard
 
-1. Open the admin dashboard at `http://localhost:3000`
-2. Click "Go to Dashboard"
-3. Create a new site:
-   - Enter your site name (e.g., "My Blog")
-   - Enter your domain (e.g., "myblog.com")
-   - Click "Create"
-4. Copy the embed code provided
+1. Build: `npm run build:admin`
+2. Deploy to Vercel, Netlify, or similar
+3. Set `NEXT_PUBLIC_API_URL` to your backend URL
 
-### Embedding the Widget
+### Widget
 
-Add this code to your website, right before the closing `</body>` tag:
+1. Build: `npm run build:widget`
+2. Upload `widget/dist/cocoon-chat.js` to CDN
+3. Update embed snippets with CDN URL
 
-```html
-<!-- Cocoon Chat Widget -->
-<script src="http://localhost:3001/widget/cocoon-chat.js"></script>
-<script>
-  createCocoonChatWidget({
-    siteKey: 'YOUR_SITE_PUBLIC_KEY_HERE',
-    apiUrl: 'http://localhost:3001'
-  });
-</script>
-```
-
-Replace `YOUR_SITE_PUBLIC_KEY_HERE` with the public key from your admin dashboard.
-
-### Example HTML Page
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Website</title>
-</head>
-<body>
-  <h1>Welcome to My Website</h1>
-  <p>This is a demo page with an embedded chat widget.</p>
-
-  <!-- Cocoon Chat Widget -->
-  <script src="http://localhost:3001/widget/cocoon-chat.js"></script>
-  <script>
-    createCocoonChatWidget({
-      siteKey: 'clxy123456789',
-      apiUrl: 'http://localhost:3001'
-    });
-  </script>
-</body>
-</html>
-```
-
-## 🔧 API Endpoints
-
-### Widget Endpoints
-
-#### Initialize Session
-```http
-POST /api/widget/init
-Content-Type: application/json
-
-{
-  "siteKey": "your-site-public-key"
-}
-
-Response:
-{
-  "sessionKey": "unique-session-key",
-  "sessionId": "session-id"
-}
-```
-
-#### Send Chat Message
-```http
-POST /api/widget/chat
-Content-Type: application/json
-
-{
-  "sessionKey": "unique-session-key",
-  "message": "Hello, how can you help me?"
-}
-
-Response:
-{
-  "message": "AI response here",
-  "messageId": "message-id",
-  "timestamp": "2024-01-01T00:00:00.000Z"
-}
-```
-
-### Admin Endpoints
-
-#### Create Site
-```http
-POST /api/admin/sites
-Content-Type: application/json
-
-{
-  "name": "My Site",
-  "domain": "example.com",
-  "ownerId": "user-id"
-}
-```
-
-#### List Sites
-```http
-GET /api/admin/sites?ownerId=user-id
-```
-
-#### Get Site Analytics
-```http
-GET /api/admin/sites/{siteId}/analytics
-```
-
-## 📊 Database Schema
-
-```prisma
-model Site {
-  id          String        @id @default(cuid())
-  ownerId     String
-  name        String
-  domain      String
-  publicKey   String        @unique
-  secretKey   String        @unique
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  sessions    ChatSession[]
-}
-
-model ChatSession {
-  id          String        @id @default(cuid())
-  siteId      String
-  sessionKey  String        @unique
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  site        Site          @relation(...)
-  messages    ChatMessage[]
-}
-
-model ChatMessage {
-  id          String      @id @default(cuid())
-  sessionId   String
-  role        String      // 'user' or 'assistant'
-  content     String      @db.Text
-  createdAt   DateTime    @default(now())
-  session     ChatSession @relation(...)
-}
-```
-
-## 🎨 Widget Customization
-
-The widget uses CSS classes that you can override in your website:
-
-```css
-/* Customize bubble color */
-.cocoon-chat-bubble {
-  background: linear-gradient(135deg, #your-color-1, #your-color-2) !important;
-}
-
-/* Customize panel size */
-.cocoon-chat-panel {
-  width: 400px !important;
-  height: 650px !important;
-}
-
-/* Customize header */
-.cocoon-chat-header {
-  background: linear-gradient(135deg, #your-color-1, #your-color-2) !important;
-}
-```
-
-## 🔒 Security Considerations
-
-### Production Checklist
-
-- [ ] Change `JWT_SECRET` to a strong random value
-- [ ] Use environment-specific database credentials
-- [ ] Enable HTTPS for all endpoints
-- [ ] Implement proper authentication for admin endpoints
-- [ ] Set up rate limiting on API endpoints
-- [ ] Add CORS restrictions based on allowed domains
-- [ ] Rotate API keys regularly
-- [ ] Monitor API usage and costs
-- [ ] Implement input validation and sanitization
-- [ ] Set up error tracking (e.g., Sentry)
-
-### CORS Configuration
-
-The backend currently allows all origins for widget embedding. For production, consider restricting by domain:
-
-```typescript
-// backend/src/index.ts
-await fastify.register(cors, {
-  origin: (origin, cb) => {
-    // Verify origin against allowed domains in database
-    // Allow requests from registered site domains only
-    cb(null, true)
-  },
-  credentials: true,
-});
-```
-
-## 📦 Production Deployment
-
-### Backend Deployment
-
-1. Build the backend:
-   ```bash
-   cd backend
-   npm run build
-   ```
-
-2. Set environment variables in your hosting platform
-
-3. Run database migrations:
-   ```bash
-   npm run prisma:migrate
-   ```
-
-4. Start the server:
-   ```bash
-   npm start
-   ```
-
-### Widget Deployment
-
-1. Build the widget:
-   ```bash
-   cd widget
-   npm run build
-   ```
-
-2. Upload `dist/cocoon-chat.js` to your CDN
-
-3. Update embed snippets to use CDN URL:
-   ```html
-   <script src="https://cdn.yourdomain.com/cocoon-chat.js"></script>
-   ```
-
-### Admin Dashboard Deployment
-
-1. Build the admin app:
-   ```bash
-   cd admin
-   npm run build
-   ```
-
-2. Deploy to Vercel, Netlify, or your preferred hosting platform
-
-## 🧪 Testing the Widget
-
-A demo page is included in the widget package:
+### Docker Production
 
 ```bash
-cd widget
-npm run dev
+# Build and start with production config
+docker compose -f docker-compose.yml up -d --build
+
+# View logs
+docker compose logs -f
+
+# Run migrations
+docker compose exec backend npx prisma migrate deploy
+
+# Seed data (if needed)
+docker compose exec backend npm run db:seed
 ```
 
-Open `http://localhost:5173` to test the widget locally.
+## Future Extensions
 
-## 📝 Development Scripts
+Potential enhancements for Phase 3+:
+
+### Short Term
+- [ ] Add authentication/authorization for admin endpoints
+- [ ] Implement rate limiting for widget endpoints
+- [ ] Add message threading and conversation history
+- [ ] Widget customization options (colors, position, text)
+- [ ] Real-time message streaming with SSE or WebSockets
+
+### Medium Term
+- [ ] Multi-language support for widget
+- [ ] Custom AI prompts per site
+- [ ] Conversation handoff to human agents
+- [ ] Advanced analytics (response time, satisfaction scores)
+- [ ] Email notifications for site owners
+
+### Long Term
+- [ ] Multi-model support (switch between AI providers)
+- [ ] Widget A/B testing
+- [ ] Integration marketplace (Slack, Discord, etc.)
+- [ ] White-label options
+- [ ] Enterprise features (SSO, audit logs)
+
+## Troubleshooting
+
+### Database Connection Issues
 
 ```bash
-# Install all dependencies
-npm install
+# Check PostgreSQL is running
+docker compose ps
 
-# Development mode (all services)
-npm run dev:backend    # Start backend API
-npm run dev:widget     # Start widget dev server
-npm run dev:admin      # Start admin dashboard
+# View database logs
+docker compose logs postgres
 
-# Build for production
-npm run build          # Build all packages
-npm run build:backend  # Build backend only
-npm run build:widget   # Build widget only
-npm run build:admin    # Build admin only
-
-# Database operations
-npm run prisma:generate  # Generate Prisma client
-npm run prisma:migrate   # Run migrations
+# Test connection
+cd backend
+npx prisma db push
 ```
 
-## 🤝 Contributing
+### Port Already in Use
 
-Contributions are welcome! Please follow these steps:
+```bash
+# Kill process on port 3001
+lsof -ti:3001 | xargs kill -9
+
+# Or change PORT in .env
+```
+
+### Docker Issues
+
+```bash
+# Clean restart
+docker compose down -v  # Remove volumes
+docker compose up -d --build
+
+# Check service health
+docker compose ps
+```
+
+### Missing API Key
+
+Make sure you have either `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` set in `.env`.
+
+## Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes
+4. Run tests: `npm test`
+5. Run linter: `npm run lint`
+6. Commit: `git commit -m 'Add amazing feature'`
+7. Push: `git push origin feature/amazing-feature`
+8. Open a Pull Request
 
-## 📄 License
+## License
 
-MIT License - feel free to use this project for personal or commercial purposes.
-
-## 🙏 Acknowledgments
-
-- Built with [Fastify](https://www.fastify.io/)
-- UI powered by [Next.js](https://nextjs.org/) and [Tailwind CSS](https://tailwindcss.com/)
-- Database management with [Prisma](https://www.prisma.io/)
-- AI capabilities from [OpenAI](https://openai.com/) and [Anthropic](https://www.anthropic.com/)
-
-## 📞 Support
-
-For issues, questions, or contributions, please open an issue on GitHub.
+MIT License - see [LICENSE](LICENSE) file for details.
 
 ---
 
-Made with ❤️ by the Cocoon Chat team
+**Built with ❤️ using TypeScript, Fastify, Next.js, and Prisma**
+
+For questions or issues, please open an issue on GitHub.

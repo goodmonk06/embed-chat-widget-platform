@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import dotenv from 'dotenv';
 import { widgetRoutes } from './routes/widget';
 import { adminRoutes } from './routes/admin';
+import { handleError } from './utils/errors';
 
 dotenv.config({ path: '../.env' });
 
@@ -18,6 +19,11 @@ async function start() {
     await fastify.register(cors, {
       origin: true, // Allow all origins for widget embedding
       credentials: true,
+    });
+
+    // Global error handler
+    fastify.setErrorHandler((error, request, reply) => {
+      handleError(error, request, reply);
     });
 
     // Register routes
@@ -42,4 +48,10 @@ async function start() {
   }
 }
 
-start();
+// Export for testing
+export { fastify };
+
+// Start server if not in test mode
+if (process.env.NODE_ENV !== 'test') {
+  start();
+}
