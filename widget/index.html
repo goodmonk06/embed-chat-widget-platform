@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cocoon Chat Widget - Demo</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #667eea;
+    }
+    .demo-content {
+      background: #f9fafb;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎨 Cocoon Chat Widget Demo</h1>
+
+  <div class="demo-content">
+    <h2>Welcome to the Demo Page</h2>
+    <p>This page demonstrates the Cocoon Chat widget. Look for the chat bubble in the bottom-right corner!</p>
+    <p>Click it to start chatting with our AI assistant.</p>
+  </div>
+
+  <div class="demo-content">
+    <h3>Features:</h3>
+    <ul>
+      <li>Beautiful, responsive chat interface</li>
+      <li>Powered by AI (OpenAI or Anthropic)</li>
+      <li>Session-based conversations</li>
+      <li>Easy to embed on any website</li>
+    </ul>
+  </div>
+
+  <script type="module" src="/src/index.ts"></script>
+  <script>
+    // Initialize the widget when the page loads
+    window.addEventListener('load', () => {
+      // Replace 'demo-site-key' with your actual site key
+      window.createCocoonChatWidget({
+        siteKey: 'demo-site-key',
+        apiUrl: 'http://localhost:3001'
+      });
+    });
+  </script>
+</body>
+</html>

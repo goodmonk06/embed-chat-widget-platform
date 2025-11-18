@@ -1,0 +1,25 @@
+{
+  "name": "cocoon-chat-widget-platform",
+  "version": "1.0.0",
+  "description": "Embeddable AI chat widget platform",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "widget",
+    "admin"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:widget": "npm run dev --workspace=widget",
+    "dev:admin": "npm run dev --workspace=admin",
+    "build:backend": "npm run build --workspace=backend",
+    "build:widget": "npm run build --workspace=widget",
+    "build:admin": "npm run build --workspace=admin",
+    "build": "npm run build:backend && npm run build:widget && npm run build:admin",
+    "prisma:generate": "npm run prisma:generate --workspace=backend",
+    "prisma:migrate": "npm run prisma:migrate --workspace=backend"
+  },
+  "keywords": ["chat", "widget", "embeddable", "ai"],
+  "author": "",
+  "license": "MIT"
+}
