@@ -2,15 +2,18 @@
 
 An embeddable AI chat widget platform that allows you to add intelligent chat functionality to any website with just a few lines of code.
 
-**Status: Phase 2** - Production-ready with complete vertical slice, testing, and Docker support.
+**Status: Phase 3** - Production-ready with deep domain model, extensibility, events, and comprehensive features.
 
 ## Overview
 
 Cocoon Chat is a full-stack, TypeScript-based platform for embedding AI-powered chat widgets on any website. It provides:
 
-- **Backend API** for managing sites, sessions, and AI-powered conversations
-- **Embeddable Widget** that can be dropped into any HTML page
-- **Admin Dashboard** for site owners to manage their widgets and view analytics
+- **Backend API** for managing sites, conversations, and AI-powered interactions
+- **Embeddable Widget** with full customization options (colors, position, messages)
+- **Admin Dashboard** for site owners to manage widgets, conversations, and analytics
+- **Extension System** with adapter interfaces for notifications, AI providers, analytics, and storage
+- **Event System** for domain events and cross-cutting concerns
+- **Multi-tenant Support** with user roles and team collaboration
 
 ## Tech Stack
 
@@ -37,28 +40,138 @@ Cocoon Chat is a full-stack, TypeScript-based platform for embedding AI-powered 
 
 ## Domain Model
 
-### Core Entities
+### Core Entities (13 Tables)
 
 ```
 Site (website using the widget)
   ├─ id, ownerId, name, domain
   ├─ publicKey (for widget embedding)
-  └─ secretKey (for admin operations)
+  ├─ secretKey (for admin operations)
+  ├─ isActive, metadata
+  └─ relationships: ChatSessions, WidgetConfiguration, Users (via SiteUser)
 
 ChatSession (individual conversation)
   ├─ id, sessionKey
   ├─ siteId (belongs to Site)
-  └─ messages[]
+  ├─ status (ACTIVE/ARCHIVED/ESCALATED/RESOLVED)
+  ├─ userEmail, userName, metadata
+  └─ relationships: ChatMessages, Tags, Rating
 
 ChatMessage (single message in conversation)
   ├─ id, role (user/assistant)
-  ├─ content, createdAt
+  ├─ content, createdAt, metadata
   └─ sessionId (belongs to ChatSession)
+
+User (authenticated team members)
+  ├─ id, email, name
+  ├─ role (OWNER/ADMIN/MEMBER/VIEWER)
+  └─ relationships: Sites (via SiteUser)
+
+WidgetConfiguration (per-site customization)
+  ├─ id, siteId
+  ├─ colors (primary, secondary, text, background)
+  ├─ position (BOTTOM_RIGHT/LEFT, TOP_RIGHT/LEFT)
+  ├─ greeting, placeholder, title
+  ├─ branding, customCSS
+  └─ belongs to: Site
+
+ConversationTag (flexible categorization)
+  ├─ id, name, description, color
+  └─ relationships: ChatSessions (via SessionTag)
+
+ConversationRating (user feedback)
+  ├─ id, sessionId, siteId
+  ├─ rating (1-5), feedback
+  └─ belongs to: ChatSession
+
+MessageTemplate (reusable content)
+  ├─ id, siteId, category, content
+  ├─ category (GREETING/FAQ/SUPPORT/SALES/ESCALATION/CLOSING)
+  ├─ isActive, sortOrder
+  └─ belongs to: Site
+
+AnalyticsSnapshot (time-series metrics)
+  ├─ id, siteId, date
+  ├─ metrics (sessions, messages, avgRating, etc.)
+  └─ belongs to: Site
+
+WebhookEndpoint (external integrations)
+  ├─ id, siteId, url, events
+  ├─ secret, isActive
+  └─ belongs to: Site
+
+AuditLog (complete action tracking)
+  ├─ id, userId, siteId, action
+  ├─ resourceType, resourceId, metadata
+  └─ tracking: all admin actions
 ```
 
 ### Relationships
-- One Site → Many ChatSessions
-- One ChatSession → Many ChatMessages
+- One Site → Many ChatSessions, Users (many-to-many via SiteUser)
+- One ChatSession → Many ChatMessages, Tags (many-to-many via SessionTag)
+- One Site → One WidgetConfiguration, Many MessageTemplates
+- Rich metadata fields (JSON) for flexibility
+
+## 🔌 Extension & Event System
+
+### Adapter Interfaces
+
+The platform uses the adapter pattern for swappable backends:
+
+**INotificationAdapter** - Alert delivery
+- ConsoleNotificationAdapter (development)
+- WebhookNotificationAdapter (production)
+- NoOpNotificationAdapter (testing)
+
+**IAIProviderAdapter** - AI backend abstraction
+- OpenAIProviderAdapter (GPT-4)
+- AnthropicProviderAdapter (Claude)
+- MockAIProviderAdapter (testing)
+
+**IAnalyticsAdapter** - Metrics export
+- ConsoleAnalyticsAdapter (development)
+- InMemoryAnalyticsAdapter (testing)
+- MultiAnalyticsAdapter (broadcast to multiple)
+
+**IStorageAdapter** - Alternative storage
+- InMemoryStorageAdapter (development/testing)
+- FileSystemStorageAdapter (local files)
+- Ready for S3Adapter, AzureBlobAdapter, etc.
+
+### Event System
+
+Type-safe pub/sub for domain events:
+
+**Event Types (10+):**
+- `site.created`, `site.updated`, `site.deleted`
+- `conversation.started`, `message.received`
+- `conversation.rated`, `conversation.tagged`
+- `widget.configuration.updated`
+- `user.created`, `user.assigned.to.site`
+
+**Event Bus Features:**
+- Wildcard subscriptions (`onAny`)
+- Async handler execution
+- Error isolation
+- Unsubscribe functions
+
+**Built-in Handlers:**
+- NotificationHandler: Alerts for low ratings, new conversations
+- AnalyticsHandler: Track all metrics automatically
+
+### Infrastructure
+
+**Structured Logging:**
+- JSON formatted logs
+- Context-aware (userId, siteId, sessionId)
+- Child loggers with inherited context
+- Log levels (DEBUG, INFO, WARN, ERROR)
+
+**Metrics Collection:**
+- HTTP request latency tracking
+- Counter, gauge, histogram support
+- Function timing utilities
+- Integration with analytics adapters
 
 ## Getting Started
 
@@ -213,25 +326,58 @@ Add to any HTML page:
 4. AI response is returned and displayed
 5. All messages are persisted in database
 
-## Demo Data
+## Demo Data (100+ Records)
 
-After running `npm run db:seed`, you'll have:
+After running `npm run db:seed`, you'll have a complete dataset across all 13 tables:
 
-**Sites:**
-- TechBlog Pro (ownerId: demo-owner-1)
-- E-Commerce Store (ownerId: demo-owner-1)
-- Support Portal (ownerId: demo-owner-2)
+**Users (4):**
+- 2 Owners, 1 Admin, 1 Member with different roles
 
-**Sessions:**
-- Pre-seeded conversations with realistic chat messages
+**Sites (4):**
+- TechBlog Pro, E-Commerce Store, Support Portal, Docs Site
+- 3 active, 1 inactive with metadata
+
+**Site-User Assignments (6):**
+- Team collaboration scenarios
+
+**Widget Configurations (2):**
+- Different color schemes and positions
+
+**Conversation Tags (5):**
+- Support, Sales, Bug, Feedback, Urgent
+
+**Message Templates (8):**
+- 4 per site across categories (GREETING, FAQ, SUPPORT, SALES)
+
+**Chat Sessions (5):**
+- Different statuses: ACTIVE, RESOLVED, ESCALATED, ARCHIVED
+- Realistic conversation scenarios
+
+**Chat Messages (19):**
+- Complete conversations with context
+
+**Session Tags (7):**
+- Tagged conversations
+
+**Ratings (3):**
+- Including low rating to trigger notifications
+
+**Analytics Snapshots (4):**
+- 2 days × 2 sites with metrics
+
+**Webhook Endpoints (2):**
+- External integration examples
+
+**Audit Logs (3):**
+- Sample admin actions
 
 **Quick Demo:**
 1. Go to http://localhost:3000/sites
-2. Click "Create Site" or view existing demo sites
+2. View existing demo sites with rich data
 3. Use ownerId: `demo-owner-1` or `demo-owner-2`
-4. View analytics to see pre-seeded data
+4. View analytics to see pre-seeded conversations and metrics
 
-## API Endpoints
+## API Endpoints (35+)
 
 ### Widget Endpoints
 
@@ -239,8 +385,10 @@ After running `npm run db:seed`, you'll have:
 |--------|----------|-------------|
 | POST | `/api/widget/init` | Initialize a new chat session |
 | POST | `/api/widget/chat` | Send a chat message and get AI response |
+| GET | `/api/widget/config/:siteKey` | Get widget configuration (colors, position, etc.) |
+| GET | `/api/widget/templates/:siteKey/:category` | Get message templates by category |
 
-### Admin Endpoints
+### Admin - Site Management
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -250,13 +398,53 @@ After running `npm run db:seed`, you'll have:
 | PUT | `/api/admin/sites/:siteId` | Update a site |
 | DELETE | `/api/admin/sites/:siteId` | Delete a site |
 | GET | `/api/admin/sites/:siteId/analytics` | Get site analytics |
+
+### Admin - Widget Configuration
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/admin/sites/:siteId/widget-config` | Create widget configuration |
+| GET | `/api/admin/sites/:siteId/widget-config` | Get widget configuration |
+| PUT | `/api/admin/sites/:siteId/widget-config` | Update widget configuration |
+| DELETE | `/api/admin/sites/:siteId/widget-config` | Delete widget configuration |
+
+### Admin - Conversation Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/admin/conversations` | List conversations (with filters & pagination) |
+| GET | `/api/admin/conversations/:sessionId` | Get full conversation details |
+| POST | `/api/admin/conversations/:sessionId/rate` | Rate a conversation (1-5 stars) |
+| POST | `/api/admin/conversations/:sessionId/tags` | Add tags to conversation |
+| PUT | `/api/admin/conversations/:sessionId/status` | Update conversation status |
+| GET | `/api/admin/conversations/:sessionId/export` | Export conversation as JSON |
 | GET | `/api/admin/sessions/:sessionId/messages` | Get session messages |
+
+### Admin - Message Templates
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/admin/templates` | Create message template |
+| GET | `/api/admin/sites/:siteId/templates` | List templates (with filters) |
+| GET | `/api/admin/templates/:templateId` | Get specific template |
+| PUT | `/api/admin/templates/:templateId` | Update template |
+| DELETE | `/api/admin/templates/:templateId` | Delete template |
+
+### Admin - Tags
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/admin/tags` | Create conversation tag |
+| GET | `/api/admin/tags` | List all tags with usage counts |
+| GET | `/api/admin/tags/:tagId` | Get specific tag |
+| PUT | `/api/admin/tags/:tagId` | Update tag |
+| DELETE | `/api/admin/tags/:tagId` | Delete tag |
 
 ### Health Check
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/health` | Service health status |
+| GET | `/health` | Service health status with adapter health |
 
 ## Available Scripts
 
@@ -308,7 +496,7 @@ npm run preview          # Preview production build
 
 ## Testing
 
-The project includes comprehensive tests for core functionality:
+The project includes comprehensive tests for core functionality (101+ tests):
 
 ```bash
 # Run all tests
@@ -325,11 +513,14 @@ npm test -- --coverage
 ```
 
 **Test Coverage:**
-- ✅ Schema validation (Zod)
+- ✅ Schema validation (Zod) - 20+ schemas
 - ✅ Error handling classes
+- ✅ Adapter system (notification, AI provider, analytics, storage)
+- ✅ Event bus (pub/sub, subscriptions, error handling)
+- ✅ Structured logging (levels, context, child loggers)
+- ✅ Metrics collection (counters, gauges, histograms, timing)
 - ✅ Site CRUD operations
-- ✅ Widget initialization
-- ✅ Chat message flow
+- ✅ Widget initialization and chat flow
 
 ## Validation & Error Handling
 
@@ -370,16 +561,34 @@ embed-chat-widget-platform/
 ├── backend/                    # Fastify API
 │   ├── src/
 │   │   ├── routes/            # API routes
-│   │   │   ├── admin.ts       # Admin endpoints
-│   │   │   └── widget.ts      # Widget endpoints
-│   │   ├── schemas/           # Zod validation schemas
+│   │   │   ├── admin.ts       # Admin: Site management
+│   │   │   ├── widget.ts      # Widget: Init & chat
+│   │   │   ├── widget-config.ts    # Widget customization
+│   │   │   ├── conversations.ts    # Conversation management
+│   │   │   ├── templates.ts        # Message templates
+│   │   │   └── tags.ts             # Conversation tags
+│   │   ├── lib/               # Core infrastructure
+│   │   │   ├── adapters/     # Extension system
+│   │   │   │   ├── index.ts          # Adapter registry
+│   │   │   │   ├── notification.adapter.ts
+│   │   │   │   ├── ai-provider.adapter.ts
+│   │   │   │   ├── analytics.adapter.ts
+│   │   │   │   └── storage.adapter.ts
+│   │   │   ├── events/       # Event system
+│   │   │   │   ├── domain-events.ts  # Event types
+│   │   │   │   ├── event-bus.ts      # Pub/sub
+│   │   │   │   └── handlers/         # Event handlers
+│   │   │   ├── logger.ts     # Structured logging
+│   │   │   └── metrics.ts    # Metrics collection
+│   │   ├── schemas/           # Zod validation (20+ schemas)
 │   │   ├── utils/             # Utilities & error handling
 │   │   ├── db.ts              # Prisma client
-│   │   ├── llm.ts             # AI integration
+│   │   ├── llm.ts             # AI integration facade
 │   │   └── index.ts           # Server entry point
 │   ├── prisma/
-│   │   ├── schema.prisma      # Database schema
-│   │   └── seed.ts            # Seed script
+│   │   ├── schema.prisma      # Database schema (13 tables)
+│   │   ├── migrations/        # Migration history
+│   │   └── seed.ts            # Rich seed data (100+ records)
 │   ├── vitest.config.ts       # Test configuration
 │   └── Dockerfile
 ├── widget/                     # Embeddable widget
@@ -392,8 +601,11 @@ embed-chat-widget-platform/
 │   │   ├── page.tsx           # Home page
 │   │   └── sites/             # Site management pages
 │   └── Dockerfile
+├── docs/                       # Documentation
+│   └── PHASE3_OVERVIEW.md     # Phase 3 design doc
 ├── docker-compose.yml          # Multi-container setup
 ├── .env.example                # Environment template
+├── PHASE3_COMPLETE.md          # Phase 3 completion summary
 └── README.md                   # This file
 ```
 
@@ -456,30 +668,43 @@ docker compose exec backend npx prisma migrate deploy
 docker compose exec backend npm run db:seed
 ```
 
+## Phase 3 Achievements ✨
+
+**Completed Features:**
+- ✅ Widget customization options (colors, position, text, custom CSS)
+- ✅ Multi-model support (OpenAI, Anthropic via adapter pattern)
+- ✅ Advanced analytics (ratings, tag-based segmentation, time-series)
+- ✅ Conversation management (status tracking, tagging, ratings, export)
+- ✅ Message templates with categories
+- ✅ Webhook notifications for external integrations
+- ✅ Enterprise features (audit logs, user roles, team collaboration)
+- ✅ Extension system for custom adapters
+
 ## Future Extensions
 
-Potential enhancements for Phase 3+:
+Potential enhancements for Phase 4+:
 
 ### Short Term
 - [ ] Add authentication/authorization for admin endpoints
 - [ ] Implement rate limiting for widget endpoints
-- [ ] Add message threading and conversation history
-- [ ] Widget customization options (colors, position, text)
 - [ ] Real-time message streaming with SSE or WebSockets
+- [ ] Dashboard UI for conversation management
+- [ ] Advanced search with full-text indexing
 
 ### Medium Term
 - [ ] Multi-language support for widget
 - [ ] Custom AI prompts per site
 - [ ] Conversation handoff to human agents
-- [ ] Advanced analytics (response time, satisfaction scores)
+- [ ] Admin panel for managing all Phase 3 features
 - [ ] Email notifications for site owners
 
 ### Long Term
-- [ ] Multi-model support (switch between AI providers)
 - [ ] Widget A/B testing
-- [ ] Integration marketplace (Slack, Discord, etc.)
+- [ ] Integration marketplace (Slack, Discord, CRM systems)
 - [ ] White-label options
-- [ ] Enterprise features (SSO, audit logs)
+- [ ] SSO authentication
+- [ ] Mobile SDKs (iOS, Android)
+- [ ] Knowledge base integration for RAG
 
 ## Troubleshooting
 
